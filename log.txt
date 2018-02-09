@@ -1,0 +1,6 @@
+Thu Feb 08:
+	Started working on the system. To build a full-fledged liver analysis DCNN, I figured I'd best begin making an operable MNIST CNN, with things like graph visualizations and loss plots included. Once that works, I'll study the code, improve it where possible, and swap the MNIST data for the liver data.
+
+Fri Feb 09:
+	Got TensorBoard to work, and installed TensorFlow on my home GPU. That way, I can train the system much faster. Reminder for next time: use the most up-to-date install guide on the TensorFlow website. CUDA 9.0, CuDNN 7.
+

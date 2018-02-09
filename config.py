@@ -18,12 +18,12 @@ make_performance_graph = True
 
 # Hyperparameters of CNN
 cnn_hyperparams = {
-    'batch_size': 10,
-    'num_epochs_train': 1,
+    'batch_size': 500,
+    'num_epochs_train': 7,
     'num_epochs_eval': 1,
-    'steps': 500,
-    'logging_interval': 50,
-    'learning_rate': 0.01,
+    'steps': 500000,
+    'logging_interval': 5,
+    'learning_rate': None,
     'verbose': True,
     'model_dir': checkpoint_directory
 }

@@ -11,3 +11,10 @@ Future plans right now include adding a personal log file; adding TensorBoard
 visualizations; and improving the system organization and code in general.
 
 -- wkvanderveen
+
+
+
+----------
+some notes for myself:
+* open tensorboard in model tmp file with "--logdir ./tmp_model_data"
+* http://localhost:6006/
