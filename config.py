@@ -13,15 +13,12 @@ and takes care of visualizations and graph production.
 overwrite_old_checkpoint = True
 checkpoint_directory = './tmp_model_data'
 
-make_performance_graph = True
-
-
 # Hyperparameters of CNN
 cnn_hyperparams = {
-    'batch_size': 500,
-    'num_epochs_train': 7,
+    'batch_size': 50,
+    'num_epochs_train': 3,
     'num_epochs_eval': 1,
-    'steps': 500000,
+    'steps': 500,
     'logging_interval': 5,
     'learning_rate': None,
     'verbose': True,

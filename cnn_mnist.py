@@ -3,10 +3,114 @@ from __future__ import division
 from __future__ import print_function
 
 # Imports
+import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
+import os
+import utils
 
 tf.logging.set_verbosity(tf.logging.INFO)
+
+PLOT_DIR = './out/plots'
+
+
+def plot_conv_weights(weights, name, channels_all=True):
+    """
+    Plots convolutional filters
+    :param weights: numpy array of rank 4
+    :param name: string, name of convolutional layer
+    :param channels_all: boolean, optional
+    :return: nothing, plots are saved on the disk
+    """
+    # make path to output folder
+    plot_dir = os.path.join(PLOT_DIR, 'conv_weights')
+    plot_dir = os.path.join(plot_dir, name)
+
+    # create directory if does not exist, otherwise empty it
+    utils.prepare_dir(plot_dir, empty=True)
+
+    w_min = np.min(weights)
+    w_max = np.max(weights)
+
+    channels = [0]
+    # make a list of channels if all are plotted
+    if channels_all:
+        channels = range(weights.shape[2])
+
+    # get number of convolutional filters
+    num_filters = weights.shape[3]
+
+    # get number of grid rows and columns
+    grid_r, grid_c = utils.get_grid_dim(num_filters)
+
+    # create figure and axes
+    fig, axes = plt.subplots(min([grid_r, grid_c]),
+                             max([grid_r, grid_c]))
+
+    # iterate channels
+    for channel in channels:
+        # iterate filters inside every channel
+        for l, ax in enumerate(axes.flat):
+            # get a single filter
+            img = weights[:, :, channel, l]
+            # put it on the grid
+            ax.imshow(img,
+                      vmin=w_min,
+                      vmax=w_max,
+                      interpolation='nearest',
+                      cmap='seismic')
+
+            # remove any labels from the axes
+            ax.set_xticks([])
+            ax.set_yticks([])
+        # save figure
+        plt.savefig(os.path.join(plot_dir, '{}-{}.png'.format(name, channel)),
+                    bbox_inches='tight')
+
+
+def plot_conv_output(conv_img, name):
+    """
+    Makes plots of results of performing convolution
+    :param conv_img: numpy array of rank 4
+    :param name: string, name of convolutional layer
+    :return: nothing, plots are saved on the disk
+    """
+    # make path to output folder
+    plot_dir = os.path.join(PLOT_DIR, 'conv_output')
+    plot_dir = os.path.join(plot_dir, name)
+
+    # create directory if does not exist, otherwise empty it
+    utils.prepare_dir(plot_dir, empty=True)
+
+    w_min = np.min(conv_img)
+    w_max = np.max(conv_img)
+
+    # get number of convolutional filters
+    num_filters = conv_img.shape[3]
+
+    # get number of grid rows and columns
+    grid_r, grid_c = utils.get_grid_dim(num_filters)
+
+    # create figure and axes
+    fig, axes = plt.subplots(min([grid_r, grid_c]),
+                             max([grid_r, grid_c]))
+
+    # iterate filters
+    for l, ax in enumerate(axes.flat):
+        # get a single image
+        img = conv_img[0, :, :,  l]
+        # put it on the grid
+        ax.imshow(img,
+                  vmin=w_min,
+                  vmax=w_max,
+                  interpolation='bicubic',
+                  cmap='Greys')
+        # remove any labels from the axes
+        ax.set_xticks([])
+        ax.set_yticks([])
+    # save figure
+    plt.savefig(os.path.join(plot_dir, '{}.png'.format(name)),
+                bbox_inches='tight')
 
 
 def cnn_model_fn(features, labels, mode):
@@ -15,31 +119,33 @@ def cnn_model_fn(features, labels, mode):
     input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
 
     # Convolutional Layer #1
-    conv1 = tf.layers.conv2d(
-        inputs=input_layer,
-        filters=32,
-        kernel_size=[5, 5],
-        padding="same",
-        activation=tf.nn.relu)
+    conv1 = tf.layers.conv2d(inputs=input_layer,
+                             filters=32,
+                             kernel_size=[5, 5],
+                             padding="same",
+                             activation=tf.nn.relu)
 
     # Pooling Layer #1
     pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
 
     # Convolutional Layer #2 and Pooling Layer #2
-    conv2 = tf.layers.conv2d(
-        inputs=pool1,
-        filters=64,
-        kernel_size=[5, 5],
-        padding="same",
-        activation=tf.nn.relu)
+    conv2 = tf.layers.conv2d(inputs=pool1,
+                             filters=64,
+                             kernel_size=[5, 5],
+                             padding="same",
+                             activation=tf.nn.relu)
+
     pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
 
     # Dense Layer
     pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
-    dense = tf.layers.dense(
-        inputs=pool2_flat, units=1024, activation=tf.nn.relu)
-    dropout = tf.layers.dropout(
-        inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
+    dense = tf.layers.dense(inputs=pool2_flat,
+                            units=1024,
+                            activation=tf.nn.relu)
+
+    dropout = tf.layers.dropout(inputs=dense,
+                                rate=0.4,
+                                training=mode == tf.estimator.ModeKeys.TRAIN)
 
     # Logits Layer
     logits = tf.layers.dense(inputs=dropout, units=10)
@@ -49,7 +155,8 @@ def cnn_model_fn(features, labels, mode):
       "classes": tf.argmax(input=logits, axis=1),
       # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
       # `logging_hook`.
-      "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
+      "probabilities": tf.nn.softmax(logits, name="softmax_tensor"),
+      "conv1_weights": tf.nn.softmax(conv1, name="conv1_weights")
     }
 
     if mode == tf.estimator.ModeKeys.PREDICT:
@@ -60,23 +167,22 @@ def cnn_model_fn(features, labels, mode):
 
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.GradientDescentOptimizer(
-            learning_rate=0.0001)
-        train_op = optimizer.minimize(
-            loss=loss,
-            global_step=tf.train.get_global_step())
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.0005)
+        train_op = optimizer.minimize(loss=loss,
+                                      global_step=tf.train.get_global_step())
+
         return tf.estimator.EstimatorSpec(mode=mode,
                                           loss=loss,
                                           train_op=train_op)
 
     # Add evaluation metrics (for EVAL mode)
     eval_metric_ops = {
-      "accuracy": tf.metrics.accuracy(
-          labels=labels, predictions=predictions["classes"])}
+      "accuracy": tf.metrics.accuracy(labels=labels,
+                                      predictions=predictions["classes"])}
 
-
-    return tf.estimator.EstimatorSpec(
-      mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
+    return tf.estimator.EstimatorSpec(mode=mode,
+                                      loss=loss,
+                                      eval_metric_ops=eval_metric_ops)
 
 
 def main(config):
@@ -95,8 +201,8 @@ def main(config):
         print("Creating Estimator...")
 
     # Create the Estimator
-    mnist_classifier = tf.estimator.Estimator(
-        model_fn=cnn_model_fn, model_dir=config['model_dir'])
+    mnist_classifier = tf.estimator.Estimator(model_fn=cnn_model_fn,
+                                              model_dir=config['model_dir'])
 
     if (config['verbose']):
         print("Set up logging for predictions...\n")
@@ -104,7 +210,7 @@ def main(config):
     # Set up logging for predictions
     tensors_to_log = {"probabilities": "softmax_tensor"}
     logging_hook = tf.train.LoggingTensorHook(
-        tensors=tensors_to_log, every_n_iter=10)
+        tensors=tensors_to_log, at_end=True)
 
     if (config['verbose']):
         print("Training model...\n")
@@ -116,10 +222,9 @@ def main(config):
         batch_size=config['batch_size'],
         num_epochs=config['num_epochs_train'],
         shuffle=True)
-    mnist_classifier.train(
-        input_fn=train_input_fn,
-        steps=config['steps'],
-        hooks=[logging_hook])
+    mnist_classifier.train(input_fn=train_input_fn,
+                           steps=config['steps'],
+                           hooks=[logging_hook])
 
     if (config['verbose']):
         print("Evaluating model...\n")
@@ -130,8 +235,19 @@ def main(config):
         y=eval_labels,
         num_epochs=config['num_epochs_eval'],
         shuffle=False)
+
     eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
     print(eval_results)
+
+    """ https://github.com/grishasergei/conviz/blob/master/conviz.py
+    """
+    # get weights of all convolutional layers
+    # no need for feed dictionary here
+    # conv_weights = tf.Session().run([tf.get_collection('conv_weights')])
+    # for i, c in enumerate(conv_weights[0]):
+    #     plot_conv_weights(c, 'conv{}'.format(i))
+
+    print(mnist_classifier.logging_hook('conv1_weights'))
 
 
 if __name__ == "__main__":
