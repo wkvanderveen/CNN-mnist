@@ -5,9 +5,12 @@ from __future__ import print_function
 # Imports
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.signal
 import tensorflow as tf
-import os
 import utils
+import os
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -116,10 +119,12 @@ def plot_conv_output(conv_img, name):
 def cnn_model_fn(features, labels, mode):
     """Model function for CNN."""
     # Input Layer
+
     input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
 
     # Convolutional Layer #1
-    conv1 = tf.layers.conv2d(inputs=input_layer,
+    conv1 = tf.layers.conv2d(name="Conv1",
+                             inputs=input_layer,
                              filters=32,
                              kernel_size=[5, 5],
                              padding="same",
@@ -129,8 +134,9 @@ def cnn_model_fn(features, labels, mode):
     pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
 
     # Convolutional Layer #2 and Pooling Layer #2
-    conv2 = tf.layers.conv2d(inputs=pool1,
-                             filters=64,
+    conv2 = tf.layers.conv2d(name="Conv2",
+                             inputs=pool1,
+                             filters=32,
                              kernel_size=[5, 5],
                              padding="same",
                              activation=tf.nn.relu)
@@ -138,7 +144,7 @@ def cnn_model_fn(features, labels, mode):
     pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
 
     # Dense Layer
-    pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
+    pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 32])
     dense = tf.layers.dense(inputs=pool2_flat,
                             units=1024,
                             activation=tf.nn.relu)
@@ -151,12 +157,11 @@ def cnn_model_fn(features, labels, mode):
     logits = tf.layers.dense(inputs=dropout, units=10)
 
     predictions = {
-      # Generate predictions (for PREDICT and EVAL mode)
-      "classes": tf.argmax(input=logits, axis=1),
-      # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
-      # `logging_hook`.
-      "probabilities": tf.nn.softmax(logits, name="softmax_tensor"),
-      "conv1_weights": tf.nn.softmax(conv1, name="conv1_weights")
+        # Generate predictions (for PREDICT and EVAL mode)
+        "classes": tf.argmax(input=logits, axis=1),
+        # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
+        # `logging_hook`.
+        "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
     }
 
     if mode == tf.estimator.ModeKeys.PREDICT:
@@ -177,8 +182,8 @@ def cnn_model_fn(features, labels, mode):
 
     # Add evaluation metrics (for EVAL mode)
     eval_metric_ops = {
-      "accuracy": tf.metrics.accuracy(labels=labels,
-                                      predictions=predictions["classes"])}
+        "accuracy": tf.metrics.accuracy(labels=labels,
+                                        predictions=predictions["classes"])}
 
     return tf.estimator.EstimatorSpec(mode=mode,
                                       loss=loss,
@@ -187,7 +192,7 @@ def cnn_model_fn(features, labels, mode):
 
 def main(config):
 
-    if (config['verbose']):
+    if (config["verbose"]):
         print("Loading data...")
 
     # Load training and eval data
@@ -197,23 +202,23 @@ def main(config):
     eval_data = mnist.test.images  # Returns np.array
     eval_labels = np.asarray(mnist.test.labels, dtype=np.int32)
 
-    if (config['verbose']):
-        print("Creating Estimator...")
+    if (config["verbose"]):
+        print("\nCreating Estimator...\n")
 
     # Create the Estimator
     mnist_classifier = tf.estimator.Estimator(model_fn=cnn_model_fn,
-                                              model_dir=config['model_dir'])
+                                              model_dir=config["model_dir"])
 
-    if (config['verbose']):
-        print("Set up logging for predictions...\n")
+    if (config["verbose"]):
+        print("\nSet up logging for predictions...\n")
 
     # Set up logging for predictions
     tensors_to_log = {"probabilities": "softmax_tensor"}
     logging_hook = tf.train.LoggingTensorHook(
         tensors=tensors_to_log, at_end=True)
 
-    if (config['verbose']):
-        print("Training model...\n")
+    if (config["verbose"]):
+        print("\nTraining model...\n")
 
     # Train the model
     train_input_fn = tf.estimator.inputs.numpy_input_fn(
@@ -226,8 +231,8 @@ def main(config):
                            steps=config['steps'],
                            hooks=[logging_hook])
 
-    if (config['verbose']):
-        print("Evaluating model...\n")
+    if (config["verbose"]):
+        print("\nEvaluating model...\n")
 
     # Evaluate the model and print results
     eval_input_fn = tf.estimator.inputs.numpy_input_fn(
@@ -241,13 +246,45 @@ def main(config):
 
     """ https://github.com/grishasergei/conviz/blob/master/conviz.py
     """
-    # get weights of all convolutional layers
-    # no need for feed dictionary here
-    # conv_weights = tf.Session().run([tf.get_collection('conv_weights')])
-    # for i, c in enumerate(conv_weights[0]):
-    #     plot_conv_weights(c, 'conv{}'.format(i))
+    if config["plot_conv_weights"]:
+        conv1_w = mnist_classifier.get_variable_value("Conv1/kernel")
+        conv2_w = mnist_classifier.get_variable_value("Conv2/kernel")
+        plot_conv_weights(conv1_w, 'conv1')
+        plot_conv_weights(conv2_w, 'conv2')
 
-    print(mnist_classifier.logging_hook('conv1_weights'))
+    if config["predict_afterwards"]:
+        # Evaluate the model and print results
+
+        plot_input_fn = tf.estimator.inputs.numpy_input_fn(
+            x={"x": mnist.test.images[:1]},
+            batch_size=1,
+            shuffle=False)
+
+        for single_predict in mnist_classifier.predict(plot_input_fn):
+            print(single_predict)
+            print("Predicted class = {}".format(single_predict['classes']))
+            print("Probablity = {}\n".format(single_predict['probabilities']))
+
+        conv1_w = mnist_classifier.get_variable_value("Conv1/kernel")
+
+    if config["plot_conv_output"]:
+        # Plot the convolution outputs for a single input
+        single_image = np.reshape(mnist.test.images[:1], (28, 28))
+
+        conv1_w = np.reshape(a=conv1_w, newshape=(32, 5, 5))
+
+        convolutions = np.zeros((32, 24, 24))
+
+        for i in range(len(conv1_w)):
+            convolutions[i, :, :] = scipy.signal.convolve2d(conv1_w[i, :, :],
+                                                            single_image,
+                                                            mode="valid")
+
+        convolutions = np.reshape(convolutions, (1, 32, 24, 24))
+        convolutions = np.swapaxes(convolutions, 1, 2)
+        convolutions = np.swapaxes(convolutions, 2, 3)
+
+        plot_conv_output(convolutions, 'conv_output')
 
 
 if __name__ == "__main__":
