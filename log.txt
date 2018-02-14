@@ -10,3 +10,7 @@ Mon Feb 12:
 Wed Feb 14:
     Modified system structure. No longer config.py as main file, but cnn_mnist.py. Makes it easier to change hyperparameters.
     Fixed an error where the convolution layer 2 weights and outputs plots would not show all channels.
+
+Thu Feb 15:
+    Merged weight and output plotting in one function.
+    Cleaned up and commented code.

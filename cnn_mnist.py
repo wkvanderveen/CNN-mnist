@@ -3,120 +3,116 @@ from __future__ import division
 from __future__ import print_function
 
 # Imports
-import matplotlib.pyplot as plt
-import numpy as np
-import scipy.signal
 import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+import config as cf
+import scipy.signal as spsig
 import utils
 import os
-import config as cf
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-tf.logging.set_verbosity(tf.logging.INFO)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'    # suppress warnings
+tf.logging.set_verbosity(tf.logging.INFO)   # display tensorflow info
 
 
-def plot_conv_weights(weights, name, channels_all=True):
+def visualize_conv(filters, layer, mode, input_image=None):
+    """Accept 4-D numpy array (width, height, n_channels, n_filters).
+
+    If 'mode' parameter equals 'weights', then this function will plot
+    the convolutional filterweights 'n_channels' times.
+
+    If 'mode' parameter equals 'output', then this function will require
+    a parameter 'input_image'.  This image will be convolved with the
+    filters and the result will be plotted.
     """
-    Plots convolutional filters
-    :param weights: numpy array of rank 4
-    :param name: string, name of convolutional layer
-    :param channels_all: boolean, optional
-    :return: nothing, plots are saved on the disk
-    """
-    # make path to output folder
-    plot_dir_w = os.path.join(cf.plot_dir, 'conv_weights')
-    plot_dir_w = os.path.join(plot_dir_w, name)
 
-    # create directory if does not exist, otherwise empty it
-    utils.prepare_dir(plot_dir_w, empty=True)
+    # Initialize target directory for the plots
+    plot_dir_path = os.path.join(cf.plot_dir, 'conv{}_{}'.format(layer, mode))
+    utils.prepare_dir(plot_dir_path, empty=True)
 
-    w_min = np.min(weights)
-    w_max = np.max(weights)
+    # Extract number of channels and filters from 4-D arrays
+    num_channels = filters.shape[2]
+    num_filters = filters.shape[3]
 
-    channels = [0]
-    # make a list of channels if all are plotted
-    if channels_all:
-        channels = range(weights.shape[2])
-
-    # get number of convolutional filters
-    num_filters = weights.shape[3]
-
-    # get number of grid rows and columns
+    # Set width and height of subplot grid, based on number of filters
     grid_r, grid_c = utils.get_grid_dim(num_filters)
 
-    # iterate channels
-    for channel in channels:
+    # Plot every channel individually
+    for ch in range(num_channels):
+
+        # Print progress information
         if cf.verbose:
-            print("Plotting weight... Channel {0} of {1}...".format(channel+1, len(channels)))
-        # create figure and axes
+            print("Plotting the {} of convolution layer {}: {:>3} of {:>3}"
+                  .format(mode, layer, ch+1, num_channels))
+
+        # Optionally convolve each filter with a single input image
+        if mode == 'output':
+
+            # Isolate channel and reshape to suitable convolution format
+            channel = np.reshape(a=filters[:, :, ch, :],
+                                 newshape=(32, 5, 5),
+                                 order='C')
+            convolutions = np.zeros((32, 24, 24))
+
+            # Convolve every filter in this channel
+            for i in range(len(channel)):
+                convolutions[i] = spsig.convolve2d(in1=channel[i],
+                                                   in2=input_image,
+                                                   mode="valid")
+
+            # Normalize plot by storing minimum and maximum values
+            v_min = np.min(convolutions)
+            v_max = np.max(convolutions)
+
+        # If mode is not 'output', then find the normalization values
+        # for the filter weights
+        else:
+            v_min = np.min(filters)
+            v_max = np.max(filters)
+
+        # Instantiate figure for this channel
         fig, axes = plt.subplots(min([grid_r, grid_c]),
                                  max([grid_r, grid_c]))
 
-        # iterate filters inside every channel
+        # Iterate over subplots and plot image of filter or convolution
         for l, ax in enumerate(axes.flat):
-            # get a single filter
-            img = weights[:, :, channel, l]
-            # put it on the grid
-            ax.imshow(img,
-                      vmin=w_min,
-                      vmax=w_max,
-                      interpolation='nearest',
-                      cmap='seismic')
 
-            # remove any labels from the axes
+            if mode == 'output':
+                img = convolutions[l]
+                ax.imshow(img,
+                          vmin=v_min,
+                          vmax=v_max,
+                          interpolation='nearest',
+                          cmap='binary')
+
+            else:
+                img = filters[:, :, ch, l]
+                ax.imshow(img,
+                          vmin=v_min,
+                          vmax=v_max,
+                          interpolation='nearest',
+                          cmap='seismic')
+
+            # Remove axis labels
             ax.set_xticks([])
             ax.set_yticks([])
-        # save figure
-        plt.savefig(os.path.join(plot_dir_w, '{}-{}.png'.format(name, str(channel))),
+
+        # Save this channel's figure in designated directory
+        plt.savefig(os.path.join(plot_dir_path, 'channel{}.png'.format(ch)),
                     bbox_inches='tight')
         plt.close('all')
 
+    print("Plotting complete! ",
+          "These plots can be found in directory {}.\n".format(plot_dir_path))
 
-def plot_conv_output(conv_img, name, fig, axes, filename=None):
-    """
-    Makes plots of results of performing convolution
-    :param conv_img: numpy array of rank 4
-    :param name: string, name of convolutional layer
-    :return: nothing, plots are saved on the disk
-    """
-    # make path to output folder
-    plot_dir_y = os.path.join(cf.plot_dir, 'conv_output')
-    plot_dir_y = os.path.join(plot_dir_y, name)
-
-    # create directory if does not exist, otherwise empty it
-    utils.prepare_dir(plot_dir_y, empty=False)
-
-    w_min = np.min(conv_img)
-    w_max = np.max(conv_img)
-
-    # iterate filters
-    for l, ax in enumerate(axes.flat):
-        # get a single image
-        img = conv_img[0, :, :,  l]
-        # put it on the grid
-        ax.imshow(img,
-                  vmin=w_min,
-                  vmax=w_max,
-                  interpolation='bicubic',
-                  cmap='Greys')
-        # remove any labels from the axes
-        ax.set_xticks([])
-        ax.set_yticks([])
-    # save figure
-    if filename is not None:
-        plt.savefig(os.path.join(plot_dir_y, '{}_{}.png'.format(name, filename)),
-                    bbox_inches='tight')
-    else:
-        plt.savefig(os.path.join(plot_dir_y, '{}.png'.format(name)),
-                    bbox_inches='tight')
 
 def cnn_model_fn(features, labels, mode):
     """Model function for CNN."""
-    # Input Layer
 
+    # Input layer
     input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
 
-    # Convolutional Layer #1
+    # Convolutional layer #1
     conv1 = tf.layers.conv2d(name="Conv1",
                              inputs=input_layer,
                              filters=32,
@@ -124,10 +120,12 @@ def cnn_model_fn(features, labels, mode):
                              padding="same",
                              activation=tf.nn.relu)
 
-    # Pooling Layer #1
-    pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
+    # Pooling layer #1
+    pool1 = tf.layers.max_pooling2d(inputs=conv1,
+                                    pool_size=[2, 2],
+                                    strides=2)
 
-    # Convolutional Layer #2 and Pooling Layer #2
+    # Convolutional layer #2 and pooling layer #2
     conv2 = tf.layers.conv2d(name="Conv2",
                              inputs=pool1,
                              filters=32,
@@ -135,9 +133,11 @@ def cnn_model_fn(features, labels, mode):
                              padding="same",
                              activation=tf.nn.relu)
 
-    pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
+    pool2 = tf.layers.max_pooling2d(inputs=conv2,
+                                    pool_size=[2, 2],
+                                    strides=2)
 
-    # Dense Layer
+    # Dense layer
     pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 32])
     dense = tf.layers.dense(inputs=pool2_flat,
                             units=cf.num_hidden,
@@ -147,24 +147,25 @@ def cnn_model_fn(features, labels, mode):
                                 rate=cf.dropout_rate,
                                 training=mode == tf.estimator.ModeKeys.TRAIN)
 
-    # Logits Layer
-    logits = tf.layers.dense(inputs=dropout, units=10)
+    # Logits layer
+    logits = tf.layers.dense(inputs=dropout,
+                             units=10)
 
+    # Generate predictions (for PREDICT and EVAL mode)
     predictions = {
-        # Generate predictions (for PREDICT and EVAL mode)
         "classes": tf.argmax(input=logits, axis=1),
-        # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
-        # `logging_hook`.
+        # Add 'softmax_tensor' to the graph.  It is used for PREDICT and by the
+        # 'logging_hook'.
         "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
     }
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
 
-    # Calculate Loss (for both TRAIN and EVAL modes)
+    # Calculate loss (for both TRAIN and EVAL modes)
     loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
 
-    # Configure the Training Op (for TRAIN mode)
+    # Configure the training op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
         optimizer = tf.train.GradientDescentOptimizer(
             learning_rate=cf.learning_rate)
@@ -188,6 +189,7 @@ def cnn_model_fn(features, labels, mode):
 
 def main(config):
 
+    # Optionally overwrite existing metadata by removing its folder
     if cf.overwrite_existing_model:
         if (cf.verbose):
             print("\nRemoving old model in {}...\n".format(cf.model_dir))
@@ -228,6 +230,7 @@ def main(config):
         batch_size=cf.batch_size,
         num_epochs=cf.num_epochs_train,
         shuffle=True)
+
     mnist_classifier.train(input_fn=train_input_fn,
                            steps=cf.steps,
                            hooks=[logging_hook])
@@ -242,25 +245,46 @@ def main(config):
         num_epochs=cf.num_epochs_eval,
         shuffle=False)
 
-    eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
-    print(eval_results)
+    print(mnist_classifier.evaluate(input_fn=eval_input_fn))
 
-    conv1_w = mnist_classifier.get_variable_value("Conv1/kernel")
-    conv2_w = mnist_classifier.get_variable_value("Conv2/kernel")
+    # Load convolution layer values for optional visualization plotting
+    conv1 = mnist_classifier.get_variable_value("Conv1/kernel")
+    conv2 = mnist_classifier.get_variable_value("Conv2/kernel")
+
+    # Load single test image for optional predictions
+    single_image = mnist.test.images[:1]
+
+    # Optionally plot the convolution layer filter weights
     if cf.plot_conv_weights:
-        if cf.verbose:
-            print("\nPlotting the weights of the convolutional filters...\n")
+        visualize_conv(filters=conv1,
+                       layer=1,
+                       mode='weights')
 
-        plot_conv_weights(conv1_w, 'conv1')
-        plot_conv_weights(conv2_w, 'conv2')
+        visualize_conv(filters=conv2,
+                       layer=2,
+                       mode='weights')
 
+    # Optionally convolve a single test image with convolution filter
+    # weights to illustrate filters
+    if cf.plot_conv_output:
+        single_image_reshaped = np.reshape(single_image, (28, 28))
+        visualize_conv(filters=conv1,
+                       layer=1,
+                       mode='output',
+                       input_image=single_image_reshaped)
+
+        visualize_conv(filters=conv2,
+                       layer=2,
+                       mode='output',
+                       input_image=single_image_reshaped)
+
+    # Optionally classify an individual test image
     if cf.predict_afterwards:
-        # Evaluate the model and print results
         if cf.verbose:
             print("\nPredicting one test instance...\n")
 
         plot_input_fn = tf.estimator.inputs.numpy_input_fn(
-            x={"x": mnist.test.images[:1]},
+            x={"x": single_image},
             batch_size=1,
             shuffle=False)
 
@@ -268,66 +292,6 @@ def main(config):
             print(single_predict)
             print("Predicted class = {}".format(single_predict['classes']))
             print("Probablity = {}\n".format(single_predict['probabilities']))
-
-    if cf.plot_conv_output:
-        if cf.verbose:
-            print("\nPlotting the output of the convolutional filters...\n")
-
-        single_image = np.reshape(mnist.test.images[1], (28, 28))
-
-        # get number of convolutional filters
-        num_filters = conv1_w.shape[3]
-
-        # get number of grid rows and columns
-        grid_r, grid_c = utils.get_grid_dim(num_filters)
-
-        # create figure and axes
-        fig, axes = plt.subplots(min([grid_r, grid_c]),
-                                 max([grid_r, grid_c]))
-
-        conv1_w = np.reshape(a=conv1_w, newshape=(32, 5, 5))
-
-        convolutions = np.zeros((32, 24, 24))
-
-        for i in range(len(conv1_w)):
-            convolutions[i, :, :] = scipy.signal.convolve2d(conv1_w[i, :, :],
-                                                            single_image,
-                                                            mode="valid")
-
-        convolutions = np.reshape(convolutions, (1, 32, 24, 24))
-        convolutions = np.swapaxes(convolutions, 1, 2)
-        convolutions = np.swapaxes(convolutions, 2, 3)
-        plot_conv_output(convolutions, 'conv1_output', fig, axes)
-
-        conv2_n_channels = conv2_w.shape[2]
-
-        # get number of convolutional filters
-        num_filters = conv2_w.shape[3]
-
-        # get number of grid rows and columns
-        grid_r, grid_c = utils.get_grid_dim(num_filters)
-
-        for channel in range(conv2_n_channels):
-            if cf.verbose:
-                print("Plotting channel {0} of {1}\
-                in convolution layer 2...".format(channel+1, conv2_n_channels))
-
-            conv2_w_channel = np.reshape(a=conv2_w[:, :, channel, :],
-                                         newshape=(32, 5, 5))
-            convolutions = np.zeros((32, 24, 24))
-            # create figure and axes
-            fig, axes = plt.subplots(min([grid_r, grid_c]),
-                                     max([grid_r, grid_c]))
-
-            for i in range(len(conv2_w_channel)):
-                convolutions[i, :, :] = scipy.signal.convolve2d(
-                    conv2_w_channel[i, :, :], single_image, mode="valid")
-
-            convolutions = np.reshape(convolutions, (1, 32, 24, 24))
-            convolutions = np.swapaxes(convolutions, 1, 2)
-            convolutions = np.swapaxes(convolutions, 2, 3)
-            plot_conv_output(convolutions, 'conv2_output', fig, axes, filename=str(channel))
-            plt.close('all')
 
 
 if __name__ == "__main__":
