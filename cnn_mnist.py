@@ -172,7 +172,7 @@ def cnn_model_fn(features, labels, mode):
 
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.0005)
+        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.0001)
         train_op = optimizer.minimize(loss=loss,
                                       global_step=tf.train.get_global_step())
 
@@ -246,9 +246,9 @@ def main(config):
 
     """ https://github.com/grishasergei/conviz/blob/master/conviz.py
     """
+    conv1_w = mnist_classifier.get_variable_value("Conv1/kernel")
+    conv2_w = mnist_classifier.get_variable_value("Conv2/kernel")
     if config["plot_conv_weights"]:
-        conv1_w = mnist_classifier.get_variable_value("Conv1/kernel")
-        conv2_w = mnist_classifier.get_variable_value("Conv2/kernel")
         plot_conv_weights(conv1_w, 'conv1')
         plot_conv_weights(conv2_w, 'conv2')
 
@@ -265,26 +265,36 @@ def main(config):
             print("Predicted class = {}".format(single_predict['classes']))
             print("Probablity = {}\n".format(single_predict['probabilities']))
 
-        conv1_w = mnist_classifier.get_variable_value("Conv1/kernel")
-
     if config["plot_conv_output"]:
         # Plot the convolution outputs for a single input
-        single_image = np.reshape(mnist.test.images[:1], (28, 28))
+        single_image = np.reshape(mnist.test.images[2], (28, 28))
 
         conv1_w = np.reshape(a=conv1_w, newshape=(32, 5, 5))
+        conv2_w = np.reshape(a=conv2_w[:, :, 7, :], newshape=(32, 5, 5))
 
-        convolutions = np.zeros((32, 24, 24))
+        convolutions1 = np.zeros((32, 24, 24))
+        convolutions2 = np.zeros((32, 24, 24))
 
         for i in range(len(conv1_w)):
-            convolutions[i, :, :] = scipy.signal.convolve2d(conv1_w[i, :, :],
+            convolutions1[i, :, :] = scipy.signal.convolve2d(conv1_w[i, :, :],
                                                             single_image,
                                                             mode="valid")
 
-        convolutions = np.reshape(convolutions, (1, 32, 24, 24))
-        convolutions = np.swapaxes(convolutions, 1, 2)
-        convolutions = np.swapaxes(convolutions, 2, 3)
+        for i in range(len(conv2_w)):
+            convolutions2[i, :, :] = scipy.signal.convolve2d(conv2_w[i, :, :],
+                                                            single_image,
+                                                            mode="valid")
 
-        plot_conv_output(convolutions, 'conv_output')
+        convolutions1 = np.reshape(convolutions1, (1, 32, 24, 24))
+        convolutions1 = np.swapaxes(convolutions1, 1, 2)
+        convolutions1 = np.swapaxes(convolutions1, 2, 3)
+
+        convolutions2 = np.reshape(convolutions2, (1, 32, 24, 24))
+        convolutions2 = np.swapaxes(convolutions2, 1, 2)
+        convolutions2 = np.swapaxes(convolutions2, 2, 3)
+
+        plot_conv_output(convolutions1, 'conv1_output')
+        plot_conv_output(convolutions2, 'conv2_output')
 
 
 if __name__ == "__main__":

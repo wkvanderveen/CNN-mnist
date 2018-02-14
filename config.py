@@ -15,14 +15,14 @@ checkpoint_directory = './tmp_model_data'
 
 # Hyperparameters of CNN
 cnn_hyperparams = {
-    'batch_size': 20,
-    'num_epochs_train': 1,
-    'num_epochs_eval': 1,
-    'steps': 2000,
-    'logging_interval': 500,
+    'batch_size': 100,
+    'num_epochs_train': 15,
+    'num_epochs_eval': 10,
+    'steps': 5000,
+    'logging_interval': 100,
     'verbose': True,
-    'plot_conv_weights': True,
-    'predict_afterwards': True,
+    'plot_conv_weights': False,
+    'predict_afterwards': False,
     'plot_conv_output': True,
     'model_dir': checkpoint_directory
 }
