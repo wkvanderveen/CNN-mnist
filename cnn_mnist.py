@@ -9,12 +9,10 @@ import scipy.signal
 import tensorflow as tf
 import utils
 import os
+import config as cf
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
 tf.logging.set_verbosity(tf.logging.INFO)
-
-PLOT_DIR = './out/plots'
 
 
 def plot_conv_weights(weights, name, channels_all=True):
@@ -26,11 +24,11 @@ def plot_conv_weights(weights, name, channels_all=True):
     :return: nothing, plots are saved on the disk
     """
     # make path to output folder
-    plot_dir = os.path.join(PLOT_DIR, 'conv_weights')
-    plot_dir = os.path.join(plot_dir, name)
+    plot_dir_w = os.path.join(cf.plot_dir, 'conv_weights')
+    plot_dir_w = os.path.join(plot_dir_w, name)
 
     # create directory if does not exist, otherwise empty it
-    utils.prepare_dir(plot_dir, empty=True)
+    utils.prepare_dir(plot_dir_w, empty=True)
 
     w_min = np.min(weights)
     w_max = np.max(weights)
@@ -46,12 +44,14 @@ def plot_conv_weights(weights, name, channels_all=True):
     # get number of grid rows and columns
     grid_r, grid_c = utils.get_grid_dim(num_filters)
 
-    # create figure and axes
-    fig, axes = plt.subplots(min([grid_r, grid_c]),
-                             max([grid_r, grid_c]))
-
     # iterate channels
     for channel in channels:
+        if cf.verbose:
+            print("Plotting weight... Channel {0} of {1}...".format(channel+1, len(channels)))
+        # create figure and axes
+        fig, axes = plt.subplots(min([grid_r, grid_c]),
+                                 max([grid_r, grid_c]))
+
         # iterate filters inside every channel
         for l, ax in enumerate(axes.flat):
             # get a single filter
@@ -67,11 +67,12 @@ def plot_conv_weights(weights, name, channels_all=True):
             ax.set_xticks([])
             ax.set_yticks([])
         # save figure
-        plt.savefig(os.path.join(plot_dir, '{}-{}.png'.format(name, channel)),
+        plt.savefig(os.path.join(plot_dir_w, '{}-{}.png'.format(name, str(channel))),
                     bbox_inches='tight')
+        plt.close('all')
 
 
-def plot_conv_output(conv_img, name):
+def plot_conv_output(conv_img, name, fig, axes, filename=None):
     """
     Makes plots of results of performing convolution
     :param conv_img: numpy array of rank 4
@@ -79,24 +80,14 @@ def plot_conv_output(conv_img, name):
     :return: nothing, plots are saved on the disk
     """
     # make path to output folder
-    plot_dir = os.path.join(PLOT_DIR, 'conv_output')
-    plot_dir = os.path.join(plot_dir, name)
+    plot_dir_y = os.path.join(cf.plot_dir, 'conv_output')
+    plot_dir_y = os.path.join(plot_dir_y, name)
 
     # create directory if does not exist, otherwise empty it
-    utils.prepare_dir(plot_dir, empty=True)
+    utils.prepare_dir(plot_dir_y, empty=False)
 
     w_min = np.min(conv_img)
     w_max = np.max(conv_img)
-
-    # get number of convolutional filters
-    num_filters = conv_img.shape[3]
-
-    # get number of grid rows and columns
-    grid_r, grid_c = utils.get_grid_dim(num_filters)
-
-    # create figure and axes
-    fig, axes = plt.subplots(min([grid_r, grid_c]),
-                             max([grid_r, grid_c]))
 
     # iterate filters
     for l, ax in enumerate(axes.flat):
@@ -112,9 +103,12 @@ def plot_conv_output(conv_img, name):
         ax.set_xticks([])
         ax.set_yticks([])
     # save figure
-    plt.savefig(os.path.join(plot_dir, '{}.png'.format(name)),
-                bbox_inches='tight')
-
+    if filename is not None:
+        plt.savefig(os.path.join(plot_dir_y, '{}_{}.png'.format(name, filename)),
+                    bbox_inches='tight')
+    else:
+        plt.savefig(os.path.join(plot_dir_y, '{}.png'.format(name)),
+                    bbox_inches='tight')
 
 def cnn_model_fn(features, labels, mode):
     """Model function for CNN."""
@@ -146,11 +140,11 @@ def cnn_model_fn(features, labels, mode):
     # Dense Layer
     pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 32])
     dense = tf.layers.dense(inputs=pool2_flat,
-                            units=1024,
+                            units=cf.num_hidden,
                             activation=tf.nn.relu)
 
     dropout = tf.layers.dropout(inputs=dense,
-                                rate=0.4,
+                                rate=cf.dropout_rate,
                                 training=mode == tf.estimator.ModeKeys.TRAIN)
 
     # Logits Layer
@@ -172,7 +166,9 @@ def cnn_model_fn(features, labels, mode):
 
     # Configure the Training Op (for TRAIN mode)
     if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.0001)
+        optimizer = tf.train.GradientDescentOptimizer(
+            learning_rate=cf.learning_rate)
+
         train_op = optimizer.minimize(loss=loss,
                                       global_step=tf.train.get_global_step())
 
@@ -192,8 +188,13 @@ def cnn_model_fn(features, labels, mode):
 
 def main(config):
 
-    if (config["verbose"]):
-        print("Loading data...")
+    if cf.overwrite_existing_model:
+        if (cf.verbose):
+            print("\nRemoving old model in {}...\n".format(cf.model_dir))
+        cf.rem_existing_model()
+
+    if (cf.verbose):
+        print("\nLoading data...\n")
 
     # Load training and eval data
     mnist = tf.contrib.learn.datasets.load_dataset("mnist")
@@ -202,14 +203,14 @@ def main(config):
     eval_data = mnist.test.images  # Returns np.array
     eval_labels = np.asarray(mnist.test.labels, dtype=np.int32)
 
-    if (config["verbose"]):
+    if (cf.verbose):
         print("\nCreating Estimator...\n")
 
     # Create the Estimator
     mnist_classifier = tf.estimator.Estimator(model_fn=cnn_model_fn,
-                                              model_dir=config["model_dir"])
+                                              model_dir=cf.model_dir)
 
-    if (config["verbose"]):
+    if (cf.verbose):
         print("\nSet up logging for predictions...\n")
 
     # Set up logging for predictions
@@ -217,43 +218,46 @@ def main(config):
     logging_hook = tf.train.LoggingTensorHook(
         tensors=tensors_to_log, at_end=True)
 
-    if (config["verbose"]):
+    if (cf.verbose):
         print("\nTraining model...\n")
 
     # Train the model
     train_input_fn = tf.estimator.inputs.numpy_input_fn(
         x={"x": train_data},
         y=train_labels,
-        batch_size=config['batch_size'],
-        num_epochs=config['num_epochs_train'],
+        batch_size=cf.batch_size,
+        num_epochs=cf.num_epochs_train,
         shuffle=True)
     mnist_classifier.train(input_fn=train_input_fn,
-                           steps=config['steps'],
+                           steps=cf.steps,
                            hooks=[logging_hook])
 
-    if (config["verbose"]):
+    if (cf.verbose):
         print("\nEvaluating model...\n")
 
     # Evaluate the model and print results
     eval_input_fn = tf.estimator.inputs.numpy_input_fn(
         x={"x": eval_data},
         y=eval_labels,
-        num_epochs=config['num_epochs_eval'],
+        num_epochs=cf.num_epochs_eval,
         shuffle=False)
 
     eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
     print(eval_results)
 
-    """ https://github.com/grishasergei/conviz/blob/master/conviz.py
-    """
     conv1_w = mnist_classifier.get_variable_value("Conv1/kernel")
     conv2_w = mnist_classifier.get_variable_value("Conv2/kernel")
-    if config["plot_conv_weights"]:
+    if cf.plot_conv_weights:
+        if cf.verbose:
+            print("\nPlotting the weights of the convolutional filters...\n")
+
         plot_conv_weights(conv1_w, 'conv1')
         plot_conv_weights(conv2_w, 'conv2')
 
-    if config["predict_afterwards"]:
+    if cf.predict_afterwards:
         # Evaluate the model and print results
+        if cf.verbose:
+            print("\nPredicting one test instance...\n")
 
         plot_input_fn = tf.estimator.inputs.numpy_input_fn(
             x={"x": mnist.test.images[:1]},
@@ -265,36 +269,65 @@ def main(config):
             print("Predicted class = {}".format(single_predict['classes']))
             print("Probablity = {}\n".format(single_predict['probabilities']))
 
-    if config["plot_conv_output"]:
-        # Plot the convolution outputs for a single input
-        single_image = np.reshape(mnist.test.images[2], (28, 28))
+    if cf.plot_conv_output:
+        if cf.verbose:
+            print("\nPlotting the output of the convolutional filters...\n")
+
+        single_image = np.reshape(mnist.test.images[1], (28, 28))
+
+        # get number of convolutional filters
+        num_filters = conv1_w.shape[3]
+
+        # get number of grid rows and columns
+        grid_r, grid_c = utils.get_grid_dim(num_filters)
+
+        # create figure and axes
+        fig, axes = plt.subplots(min([grid_r, grid_c]),
+                                 max([grid_r, grid_c]))
 
         conv1_w = np.reshape(a=conv1_w, newshape=(32, 5, 5))
-        conv2_w = np.reshape(a=conv2_w[:, :, 7, :], newshape=(32, 5, 5))
 
-        convolutions1 = np.zeros((32, 24, 24))
-        convolutions2 = np.zeros((32, 24, 24))
+        convolutions = np.zeros((32, 24, 24))
 
         for i in range(len(conv1_w)):
-            convolutions1[i, :, :] = scipy.signal.convolve2d(conv1_w[i, :, :],
+            convolutions[i, :, :] = scipy.signal.convolve2d(conv1_w[i, :, :],
                                                             single_image,
                                                             mode="valid")
 
-        for i in range(len(conv2_w)):
-            convolutions2[i, :, :] = scipy.signal.convolve2d(conv2_w[i, :, :],
-                                                            single_image,
-                                                            mode="valid")
+        convolutions = np.reshape(convolutions, (1, 32, 24, 24))
+        convolutions = np.swapaxes(convolutions, 1, 2)
+        convolutions = np.swapaxes(convolutions, 2, 3)
+        plot_conv_output(convolutions, 'conv1_output', fig, axes)
 
-        convolutions1 = np.reshape(convolutions1, (1, 32, 24, 24))
-        convolutions1 = np.swapaxes(convolutions1, 1, 2)
-        convolutions1 = np.swapaxes(convolutions1, 2, 3)
+        conv2_n_channels = conv2_w.shape[2]
 
-        convolutions2 = np.reshape(convolutions2, (1, 32, 24, 24))
-        convolutions2 = np.swapaxes(convolutions2, 1, 2)
-        convolutions2 = np.swapaxes(convolutions2, 2, 3)
+        # get number of convolutional filters
+        num_filters = conv2_w.shape[3]
 
-        plot_conv_output(convolutions1, 'conv1_output')
-        plot_conv_output(convolutions2, 'conv2_output')
+        # get number of grid rows and columns
+        grid_r, grid_c = utils.get_grid_dim(num_filters)
+
+        for channel in range(conv2_n_channels):
+            if cf.verbose:
+                print("Plotting channel {0} of {1}\
+                in convolution layer 2...".format(channel+1, conv2_n_channels))
+
+            conv2_w_channel = np.reshape(a=conv2_w[:, :, channel, :],
+                                         newshape=(32, 5, 5))
+            convolutions = np.zeros((32, 24, 24))
+            # create figure and axes
+            fig, axes = plt.subplots(min([grid_r, grid_c]),
+                                     max([grid_r, grid_c]))
+
+            for i in range(len(conv2_w_channel)):
+                convolutions[i, :, :] = scipy.signal.convolve2d(
+                    conv2_w_channel[i, :, :], single_image, mode="valid")
+
+            convolutions = np.reshape(convolutions, (1, 32, 24, 24))
+            convolutions = np.swapaxes(convolutions, 1, 2)
+            convolutions = np.swapaxes(convolutions, 2, 3)
+            plot_conv_output(convolutions, 'conv2_output', fig, axes, filename=str(channel))
+            plt.close('all')
 
 
 if __name__ == "__main__":
