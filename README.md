@@ -1,26 +1,12 @@
 # bachpro
 
-This is a project I'm doing for my AI BSc.
-The goal is to build a liver analysis system using a deep convolution neural network,
-but right now I'm just testing some basic CNN in TensorFlow, and checking if everything
-works with Git. I can use this initial system to bootstrap the project system.
+This is a simple convolutional neural network, that I built as a refresher in
+preparation for my Bachelor's Thesis. It is written in TensorFlow with the Estimator API.
 
-Over the next couple of weeks/months, I'll continue to improve the system.
-
-Future plans right now include adding a personal log file; adding TensorBoard
-visualizations; and improving the system organization and code in general.
-
-Future plans right now include building an automatic hyperparameter optimizer,
-improving the GUI and performance visualization, and improving the legibility of the code.
+My Bachelor Project will involve Residual Neural Networks. For its
+construction, I might use GitHub as well, but the data set will be classified.
 
 -- wkvanderveen
-
-
-
-----------
-some notes for myself:
-* open tensorboard in model tmp file with "--logdir ./tmp_model_data"
-* http://localhost:6006/
 
 
 How to run this network:

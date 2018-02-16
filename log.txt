@@ -5,12 +5,20 @@ Fri Feb 09:
 	Got TensorBoard to work, and installed TensorFlow on my home GPU. That way, I can train the system much faster. Reminder for next time: use the most up-to-date install guide on the TensorFlow website. CUDA 9.0, CuDNN 7.
 
 Mon Feb 12:
-    Implemented a visualization for the convolutional layer weights and outputs.
+    Implemented a visualization for the convolutional layer weights and
+    outputs.
 
 Wed Feb 14:
     Modified system structure. No longer config.py as main file, but cnn_mnist.py. Makes it easier to change hyperparameters.
-    Fixed an error where the convolution layer 2 weights and outputs plots would not show all channels.
+    Fixed an error where the convolution layer 2 weights and outputs plots
+    would not show all channels.
 
 Thu Feb 15:
     Merged weight and output plotting in one function.
     Cleaned up and commented code.
+
+Fri Feb 16:
+    For the time being, I will not be updating this repo any further. Instead,
+    I will work on the actual network. It's not going to be a DCNN but an RNN.
+    The current version of this MNIST CNN can be considered the final version,
+    and should work as a simple standalone version.
