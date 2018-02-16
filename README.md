@@ -1,4 +1,4 @@
-# bachpro
+# CNN-mnist
 
 This is a simple convolutional neural network, that I built as a refresher in
 preparation for my Bachelor's Thesis. It is written in TensorFlow with the Estimator API.
